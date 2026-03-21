@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
+import copy
 import json
 import subprocess
 import sys
@@ -11,7 +12,6 @@ from .cache_store import load_cache, save_cache
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# 실제 스캐너 파일 이름을 여기에 연결
 SCRIPT_MAP = {
     "50": "scanner_stable.py",
     "51": "scanner_swing.py",
@@ -72,18 +72,21 @@ def _run_python_script(filename: str) -> dict[str, Any]:
         encoding="utf-8",
         errors="replace",
         cwd=str(BASE_DIR),
-        timeout=180,
+        timeout=300,
     )
 
     if result.returncode != 0:
-        raise RuntimeError(result.stderr.strip() or f"script failed: {filename}")
+        raise RuntimeError(result.stderr.strip() or result.stdout.strip() or f"script failed: {filename}")
 
-    stdout = result.stdout.strip()
+    stdout = (result.stdout or "").strip()
     start = _find_json_start(stdout)
     if start < 0:
-        raise ValueError(f"json output not found: {filename}")
+        raise ValueError(f"json output not found: {filename}\nstdout={stdout[:500]}")
 
-    return json.loads(stdout[start:])
+    parsed = json.loads(stdout[start:])
+    if not isinstance(parsed, dict):
+        raise ValueError(f"json root must be object: {filename}")
+    return parsed
 
 
 def _to_market(value: str | None) -> str:
@@ -154,6 +157,7 @@ def _normalize_scanner(scanner_key: str, raw: dict[str, Any]) -> dict[str, Any]:
         "description": SCANNER_INFO[scanner_key]["description"],
         "updated_at": updated_at,
         "summary_text": _build_summary_text(scanner_key, raw, updated_at),
+        "stale_from_cache": False,
     }
 
     items = raw.get("result", [])
@@ -180,33 +184,54 @@ def _default_indexes() -> dict[str, Any]:
     }
 
 
+def _build_error_scanner(key: str, error_text: str, previous: dict[str, Any] | None) -> dict[str, Any]:
+    if previous:
+        copied = copy.deepcopy(previous)
+        copied.setdefault("meta", {})
+        copied["meta"]["stale_from_cache"] = True
+        copied["meta"]["last_error"] = error_text
+        copied["meta"]["summary_text"] = (
+            copied["meta"].get("summary_text", SCANNER_INFO[key]["title"]) +
+            f"\n\n[주의] 최신 실행 실패로 이전 캐시를 표시 중\n사유: {error_text}"
+        )
+        return copied
+
+    return {
+        "meta": {
+            "key": key,
+            "title": SCANNER_INFO[key]["title"],
+            "description": SCANNER_INFO[key]["description"],
+            "updated_at": now_text(),
+            "summary_text": f"{SCANNER_INFO[key]['title']}\n실행 실패: {error_text}",
+            "stale_from_cache": False,
+            "last_error": error_text,
+        },
+        "result": [],
+    }
+
+
 def run_all_scanners() -> dict[str, Any]:
     previous = load_cache()
     payload: dict[str, Any] = {
         "updated_at": now_text(),
         "indexes": previous.get("indexes") or _default_indexes(),
         "scanners": {},
+        "errors": {},
     }
 
     for key, filename in SCRIPT_MAP.items():
         try:
+            print(f"[RUN] {key} -> {filename}", flush=True)
             raw = _run_python_script(filename)
             payload["scanners"][key] = _normalize_scanner(key, raw)
+            print(f"[OK] {key}", flush=True)
         except Exception as e:
+            error_text = f"{type(e).__name__}: {e}"
+            payload["errors"][key] = error_text
+            print(f"[FAIL] {key} -> {error_text}", flush=True)
             old = previous.get("scanners", {}).get(key)
-            if old:
-                payload["scanners"][key] = old
-            else:
-                payload["scanners"][key] = {
-                    "meta": {
-                        "key": key,
-                        "title": SCANNER_INFO[key]["title"],
-                        "description": SCANNER_INFO[key]["description"],
-                        "updated_at": payload["updated_at"],
-                        "summary_text": f"{SCANNER_INFO[key]['title']}\n실행 실패: {e}",
-                    },
-                    "result": [],
-                }
+            payload["scanners"][key] = _build_error_scanner(key, error_text, old)
 
     save_cache(payload)
+    print("[DONE] scanner_cache.json saved", flush=True)
     return payload
