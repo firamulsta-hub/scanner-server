@@ -3,3 +3,4 @@ uvicorn[standard]
 httpx
 finance-datareader
 pandas
+pykrx
