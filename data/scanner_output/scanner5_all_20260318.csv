@@ -1,0 +1,10 @@
+﻿차트등급,시장,종목코드,종목명,현재가,5일변화율(%),20일변화율(%),거래대금(원),차트점수,20일선위,60일선위,거래량증가,고점근접,양봉마감,상단압박,기준일자
+A,KOSPI,005935,삼성전자우,149100,7.34,22.11,774780705300,9,True,True,False,True,True,True,20260318
+A,KOSPI,034020,두산에너빌리티,107300,6.24,12.36,443611248400,9,True,True,False,True,True,True,20260318
+B,KOSDAQ,298380,에이비엘바이오,195500,7.18,3.33,100932153500,8,True,True,False,True,True,True,20260318
+B,KOSPI,443060,HD현대마린솔루션,183400,3.15,10.22,21189119000,8,True,True,False,True,True,False,20260318
+B,KOSDAQ,263750,펄어비스,65600,6.84,22.62,90244608000,8,True,True,True,False,True,False,20260318
+B,KOSPI,012510,더존비즈온,119100,0.08,37.69,37029857400,8,True,True,False,True,False,True,20260318
+B,KOSPI,017960,한국카본,48750,3.5,39.68,38498362500,8,True,True,False,True,False,True,20260318
+B,KOSDAQ,100790,미래에셋벤처투자,24050,5.71,7.37,117868400650,8,True,True,True,False,True,False,20260318
+A,KOSDAQ,079370,제우스,18310,6.76,2.63,22314708270,9,True,True,True,True,True,True,20260318
