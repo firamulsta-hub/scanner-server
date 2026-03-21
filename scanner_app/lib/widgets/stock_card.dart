@@ -19,7 +19,8 @@ class StockCard extends StatelessWidget {
     }
   }
 
-  Color get priceColor => item.changePercent >= 0 ? AppColors.red : AppColors.blue;
+  Color get priceColor =>
+      item.changePercent >= 0 ? AppColors.red : AppColors.blue;
 
   String formatPrice(double value) {
     final isInt = value % 1 == 0;
@@ -43,7 +44,14 @@ class StockCard extends StatelessWidget {
           context: context,
           backgroundColor: Colors.transparent,
           isScrollControlled: true,
-          builder: (_) => StockDetailSheet(item: item),
+          builder: (context) => GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => Navigator.pop(context), // 🔥 아무데나 터치하면 닫힘
+            child: GestureDetector(
+              onTap: () {}, // 내부 터치 이벤트 막아서 바로 안닫히게 (버튼 등 대비)
+              child: StockDetailSheet(item: item),
+            ),
+          ),
         );
       },
       child: Container(
@@ -60,15 +68,28 @@ class StockCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(item.name, style: const TextStyle(color: AppColors.white, fontSize: 17, fontWeight: FontWeight.w700)),
+                  Text(
+                    item.name,
+                    style: const TextStyle(
+                      color: AppColors.white,
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                   const SizedBox(height: 6),
-                  Text('${item.code}  ·  ${item.market}', style: const TextStyle(color: AppColors.muted)),
+                  Text(
+                    '${item.code}  ·  ${item.market}',
+                    style: const TextStyle(color: AppColors.muted),
+                  ),
                   const SizedBox(height: 10),
                   Row(
                     children: [
                       Text(
                         '현재가 ${formatPrice(item.currentPrice)}',
-                        style: TextStyle(color: priceColor, fontWeight: FontWeight.w700),
+                        style: TextStyle(
+                          color: priceColor,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                       const SizedBox(width: 8),
                       Text(
@@ -81,12 +102,19 @@ class StockCard extends StatelessWidget {
               ),
             ),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
                 color: statusColor.withOpacity(0.15),
                 borderRadius: BorderRadius.circular(999),
               ),
-              child: Text(item.status, style: TextStyle(color: statusColor, fontWeight: FontWeight.w700)),
+              child: Text(
+                item.status,
+                style: TextStyle(
+                  color: statusColor,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ),
           ],
         ),
