@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 import copy
 import json
@@ -179,8 +179,43 @@ def _normalize_scanner(scanner_key: str, raw: dict[str, Any]) -> dict[str, Any]:
 
 def _default_indexes() -> dict[str, Any]:
     return {
-        "kospi": {"name": "KOSPI", "value": 2718.35, "change_percent": 0.42},
-        "kosdaq": {"name": "KOSDAQ", "value": 889.44, "change_percent": -0.31},
+        "kospi": {"name": "KOSPI", "value": 0.0, "change_percent": 0.0},
+        "kosdaq": {"name": "KOSDAQ", "value": 0.0, "change_percent": 0.0},
+    }
+
+
+def _fetch_live_indexes() -> dict[str, Any]:
+    try:
+        import FinanceDataReader as fdr  # type: ignore
+    except Exception as e:
+        raise RuntimeError(f"FinanceDataReader import failed: {e}")
+
+    def read_one(symbol: str, name: str) -> dict[str, Any]:
+        end = datetime.now()
+        start = end - timedelta(days=10)
+        df = fdr.DataReader(symbol, start, end)
+
+        if df is None or len(df) == 0:
+            raise RuntimeError(f"{name} data empty")
+
+        latest = df.iloc[-1]
+        close_value = float(latest["Close"])
+
+        if len(df) >= 2:
+            prev_close = float(df.iloc[-2]["Close"])
+            change_percent = ((close_value / prev_close) - 1.0) * 100.0 if prev_close else 0.0
+        else:
+            change_percent = 0.0
+
+        return {
+            "name": name,
+            "value": round(close_value, 2),
+            "change_percent": round(change_percent, 2),
+        }
+
+    return {
+        "kospi": read_one("KS11", "KOSPI"),
+        "kosdaq": read_one("KQ11", "KOSDAQ"),
     }
 
 
@@ -212,9 +247,17 @@ def _build_error_scanner(key: str, error_text: str, previous: dict[str, Any] | N
 
 def run_all_scanners() -> dict[str, Any]:
     previous = load_cache()
+
+    try:
+        indexes = _fetch_live_indexes()
+        print(f"[OK] indexes -> {indexes}", flush=True)
+    except Exception as e:
+        indexes = previous.get("indexes") or _default_indexes()
+        print(f"[FAIL] indexes -> {type(e).__name__}: {e}", flush=True)
+
     payload: dict[str, Any] = {
         "updated_at": now_text(),
-        "indexes": previous.get("indexes") or _default_indexes(),
+        "indexes": indexes,
         "scanners": {},
         "errors": {},
     }
