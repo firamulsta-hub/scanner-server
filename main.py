@@ -1,9 +1,14 @@
-from fastapi import FastAPI
+from __future__ import annotations
+
+from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 
-app = FastAPI()
+from services.cache_store import load_cache
+from services.scanner_runner import run_all_scanners
+from services.summary_builder import scanner_descriptions
 
-# ✅ CORS (모바일/웹 접속 허용)
+app = FastAPI(title="Leading Scanner API")
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -12,100 +17,57 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ✅ 서버 상태 확인용
+SCANNER_LABELS = scanner_descriptions()
+
+
+@app.on_event("startup")
+def startup_event() -> None:
+    cache = load_cache()
+    if not cache.get("updated_at"):
+        run_all_scanners()
+
+
 @app.get("/")
-def home():
-    return {"message": "scanner server running"}
+def root():
+    return {"message": "leading scanner server running"}
 
-# -----------------------------
-# SCANNERS
-# -----------------------------
 
-@app.get("/scan/50")
-def scan_50():
+@app.get("/refresh")
+def refresh():
+    return run_all_scanners()
+
+
+@app.get("/dashboard")
+def dashboard():
+    return load_cache()
+
+
+@app.get("/descriptions")
+def descriptions():
+    return SCANNER_LABELS
+
+
+@app.get("/scan/{scanner_key}")
+def scan(scanner_key: str, market: str | None = Query(default=None)):
+    cache = load_cache()
+    scanner = cache.get("scanners", {}).get(scanner_key)
+    if not scanner:
+        return {"error": "scanner not found", "scanner_key": scanner_key}
+
+    result = scanner.get("result", [])
+    if market:
+        result = [item for item in result if item.get("market", "").lower() == market.lower()]
+
     return {
-        "scanner": "5.0_stable",
-        "result": [
-            {"code": "263750", "name": "펄어비스", "status": "PASS"},
-            {"code": "85910", "name": "네오티스", "status": "WATCH"}
-        ]
+        "meta": scanner.get("meta", {}),
+        "summary": scanner.get("summary"),
+        "strategy": scanner.get("strategy"),
+        "result": result,
+        "updated_at": cache.get("updated_at"),
     }
 
-@app.get("/scan/51")
-def scan_51():
-    return {
-        "scanner": "5.1_swing",
-        "result": [
-            {"code": "1510", "name": "SK증권", "status": "PASS"},
-            {"code": "37350", "name": "성도이엔지", "status": "PASS"}
-        ]
-    }
 
-@app.get("/scan/60")
-def scan_60():
-    return {
-        "scanner": "6.0_force",
-        "result": [
-            {"code": "660", "name": "SK하이닉스", "status": "WATCH"}
-        ]
-    }
-
-@app.get("/scan/70")
-def scan_70():
-    return {
-        "scanner": "7.0_early",
-        "result": [
-            {"code": "6260", "name": "LS", "status": "WATCH"}
-        ]
-    }
-
-@app.get("/scan/92")
-def scan_92():
-    return {
-        "date": "20260318",
-        "market_mode": "강세 확산형",
-        "recommended_scanners": ["5.0_stable", "5.1_swing", "6.0_force", "7.0_early"],
-        "position_size": "총 자금의 30%~40%",
-        "strategy_type": "단타 + 스윙 병행",
-        "comment": "여러 스캐너가 동시에 강합니다. 시장이 상승장 초입일 가능성이 큽니다."
-    }
-
-@app.get("/scan/93b")
-def scan_93b():
-    return {
-        "scanner": "9.3B",
-        "result": [
-            {
-                "code": "1510",
-                "name": "SK증권",
-                "entry1": 1838.64,
-                "stop": 1750.66,
-                "target": 1983.40,
-                "rr": 1.65,
-                "status": "PASS"
-            },
-            {
-                "code": "263750",
-                "name": "펄어비스",
-                "entry1": 63960.00,
-                "stop": 60768.56,
-                "target": 69208.00,
-                "rr": 1.64,
-                "status": "PASS"
-            },
-            {
-                "code": "660",
-                "name": "SK하이닉스",
-                "entry1": 1043328.00,
-                "stop": 998712.00,
-                "target": 1119360.00,
-                "rr": 1.70,
-                "status": "WATCH"
-            }
-        ]
-    }
-
-# ✅ Render용 (중요)
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+@app.get("/indexes")
+def indexes():
+    cache = load_cache()
+    return cache.get("indexes", {})
