@@ -21,6 +21,20 @@ class StockCard extends StatelessWidget {
 
   Color get priceColor => item.changePercent >= 0 ? AppColors.red : AppColors.blue;
 
+  String formatPrice(double value) {
+    final isInt = value % 1 == 0;
+    if (!isInt) {
+      final parts = value.toStringAsFixed(2).split('.');
+      return '${_comma(parts[0])}.${parts[1]}';
+    }
+    return _comma(value.toInt().toString());
+  }
+
+  String _comma(String digits) {
+    final reg = RegExp(r'\B(?=(\d{3})+(?!\d))');
+    return digits.replaceAllMapped(reg, (m) => ',');
+  }
+
   @override
   Widget build(BuildContext context) {
     return InkWell(
@@ -53,7 +67,7 @@ class StockCard extends StatelessWidget {
                   Row(
                     children: [
                       Text(
-                        '현재가 ${item.currentPrice.toStringAsFixed(item.currentPrice % 1 == 0 ? 0 : 2)}',
+                        '현재가 ${formatPrice(item.currentPrice)}',
                         style: TextStyle(color: priceColor, fontWeight: FontWeight.w700),
                       ),
                       const SizedBox(width: 8),

@@ -28,26 +28,30 @@ class ScannerButtonGrid extends StatelessWidget {
       physics: const NeverScrollableScrollPhysics(),
       crossAxisSpacing: 10,
       mainAxisSpacing: 10,
-      childAspectRatio: 2.2,
+      childAspectRatio: 2.0,
       children: buttons.map((entry) {
         final isSelected = selectedKey == entry.$1;
         return InkWell(
           onTap: () => onSelect(entry.$1),
           child: Container(
-            padding: const EdgeInsets.all(14),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             decoration: BoxDecoration(
               color: isSelected ? AppColors.blue.withOpacity(0.18) : AppColors.panel,
               borderRadius: BorderRadius.circular(18),
               border: Border.all(color: isSelected ? AppColors.blue : AppColors.line, width: 1.2),
             ),
             child: Center(
-              child: Text(
-                entry.$2,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: isSelected ? AppColors.white : AppColors.muted,
-                  fontWeight: FontWeight.w700,
-                  height: 1.4,
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  entry.$2,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: isSelected ? AppColors.white : AppColors.muted,
+                    fontWeight: FontWeight.w700,
+                    height: 1.35,
+                    fontSize: 14,
+                  ),
                 ),
               ),
             ),
