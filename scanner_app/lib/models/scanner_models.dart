@@ -74,11 +74,22 @@ class StockItem {
   });
 
   factory StockItem.fromJson(Map<String, dynamic> json) {
+    String market = json['market'] ?? 'UNKNOWN';
+
+    if (market == 'UNKNOWN') {
+      final code = (json['code'] ?? '').toString();
+      if (code.startsWith('0')) {
+        market = 'KOSPI';
+      } else {
+        market = 'KOSDAQ';
+      }
+    }
+
     return StockItem(
       code: json['code'] ?? '',
       name: json['name'] ?? '',
       status: json['status'] ?? '',
-      market: json['market'] ?? '',
+      market: market,
       currentPrice: (json['current_price'] ?? 0).toDouble(),
       changePercent: (json['change_percent'] ?? 0).toDouble(),
       scannerType: json['scanner_type'] ?? '',

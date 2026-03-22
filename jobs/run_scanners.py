@@ -28,9 +28,6 @@ def parse_float(text: str) -> float:
     m = re.search(r"-?\d+(?:\.\d+)?", text)
     return float(m.group()) if m else 0.0
 
-def detect_market(name: str) -> str:
-    return "UNKNOWN"
-
 def find_latest_summary() -> Path | None:
     files: list[Path] = []
     for folder in SEARCH_DIRS:
@@ -76,7 +73,7 @@ def parse_summary_file(path: Path) -> dict:
                 "code": parts[0].zfill(6),
                 "name": parts[1],
                 "scanner_type": parts[2],
-                "market": detect_market(parts[1]),
+                "market": "UNKNOWN",
                 "current_price": parse_float(parts[3].replace("현재가:", "")),
                 "change_percent": 0.0,
                 "entry1": parse_float(parts[4].replace("진입1:", "")),
@@ -102,6 +99,7 @@ def parse_summary_file(path: Path) -> dict:
 def fetch_indexes() -> dict:
     try:
         import FinanceDataReader as fdr  # type: ignore
+
         end = datetime.now()
         start = end - timedelta(days=10)
 
@@ -115,7 +113,11 @@ def fetch_indexes() -> dict:
                 change = ((close / prev) - 1.0) * 100.0 if prev else 0.0
             else:
                 change = 0.0
-            return {"name": name, "value": round(close, 2), "change_percent": round(change, 2)}
+            return {
+                "name": name,
+                "value": round(close, 2),
+                "change_percent": round(change, 2),
+            }
 
         return {
             "kospi": one("KS11", "KOSPI"),
@@ -126,6 +128,50 @@ def fetch_indexes() -> dict:
             "kospi": {"name": "KOSPI", "value": 0.0, "change_percent": 0.0},
             "kosdaq": {"name": "KOSDAQ", "value": 0.0, "change_percent": 0.0},
         }
+
+def enrich_market_and_change(items: list[dict]) -> list[dict]:
+    try:
+        import FinanceDataReader as fdr  # type: ignore
+    except Exception:
+        return items
+
+    try:
+        krx = fdr.StockListing("KRX")
+        market_map: dict[str, str] = {}
+        if "Symbol" in krx.columns and "Market" in krx.columns:
+            for _, row in krx.iterrows():
+                code = str(row["Symbol"]).zfill(6)
+                market = str(row["Market"]).upper()
+                if "KOSDAQ" in market:
+                    market_map[code] = "KOSDAQ"
+                elif "KOSPI" in market:
+                    market_map[code] = "KOSPI"
+                else:
+                    market_map[code] = market
+    except Exception:
+        market_map = {}
+
+    end = datetime.now()
+    start = end - timedelta(days=7)
+
+    for item in items:
+        code = str(item.get("code", "")).zfill(6)
+        if code in market_map:
+            item["market"] = market_map[code]
+        else:
+            item["market"] = "KOSPI" if code.startswith("0") else "KOSDAQ"
+
+        try:
+            df = fdr.DataReader(code, start, end)
+            if df is not None and len(df) >= 2:
+                prev_close = float(df.iloc[-2]["Close"])
+                current_price = float(item.get("current_price", 0.0))
+                if prev_close:
+                    item["change_percent"] = round(((current_price / prev_close) - 1.0) * 100.0, 2)
+        except Exception:
+            item["change_percent"] = 0.0
+
+    return items
 
 def main() -> None:
     ensure_cache_dir()
@@ -159,6 +205,8 @@ def main() -> None:
         }
     else:
         parsed = parse_summary_file(summary_file)
+        parsed["result"] = enrich_market_and_change(parsed["result"])
+
         payload = {
             "updated_at": now_text(),
             "indexes": fetch_indexes(),
@@ -188,7 +236,7 @@ def main() -> None:
         }
 
     CACHE_FILE.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-    print("[DONE] 93b cache updated")
+    print("[DONE] 93b cache updated with market/change")
 
 if __name__ == "__main__":
     main()
